@@ -1,4 +1,4 @@
-import discord
+=import discord
 from discord.ext import commands
 from gtts import gTTS
 import os
@@ -6,6 +6,8 @@ from discord import FFmpegPCMAudio
 from dotenv import load_dotenv
 import asyncio
 import yt_dlp
+from flask import Flask
+from threading import Thread
 
 load_dotenv()
 
@@ -119,12 +121,7 @@ async def on_message(message):
     await vc.disconnect()
     os.remove("tts.mp3")
 
-bot.run(TOKEN)
-
-# --- Render keepalive용 웹서버 ---
-from flask import Flask
-from threading import Thread
-
+# Render용 웹 서버 (PORT 바인딩 유지용)
 app = Flask('')
 
 @app.route('/')
@@ -138,6 +135,5 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-# 웹서버 실행 후 봇 시작
 keep_alive()
 bot.run(TOKEN)
