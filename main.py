@@ -6,13 +6,17 @@ import yt_dlp
 from discord import PCMVolumeTransformer
 from gtts import gTTS
 
+# Flask 포트 유지용
+from flask import Flask
+from threading import Thread
+
+# 환경변수 로드
 load_dotenv()
 
-# Discord Intents 설정
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
-intents.messages = True  # 이거 중요!
+intents.messages = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
@@ -110,17 +114,12 @@ async def 말해(ctx, *, text: str):
 
     await ctx.send(f"🗣️ `{text}` 라고 말했어요.")
 
-bot.run(os.getenv("BOT_TOKEN"))
-
-# main.py 하단에 추가 (bot.run() 전에 넣기)
-from flask import Flask
-from threading import Thread
-
-app = Flask(__name__)
+# 🧠 Flask 웹서버 - Render에서 서비스 살아있게 유지용
+app = Flask('')
 
 @app.route('/')
-def index():
-    return "Bot is running!"
+def home():
+    return "✅ Discord bot is running!"
 
 def run():
     app.run(host='0.0.0.0', port=8080)
@@ -129,5 +128,6 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-keep_alive()  # 웹서버 시작
-
+# 💡 Flask는 bot.run()보다 먼저 실행해야 함!
+keep_alive()
+bot.run(os.getenv("BOT_TOKEN"))
