@@ -1,130 +1,122 @@
 import discord
 from discord.ext import commands
-import os
-from dotenv import load_dotenv
-import yt_dlp
-from discord import PCMVolumeTransformer
 from gtts import gTTS
-import threading
-from flask import Flask
+import os
+from discord import FFmpegPCMAudio
+from dotenv import load_dotenv
+import asyncio
+import yt_dlp
 
-# .env 로딩
 load_dotenv()
 
-# 봇 설정
+TOKEN = os.getenv("BOT_TOKEN")
 intents = discord.Intents.default()
+intents.messages = True
 intents.message_content = True
 intents.voice_states = True
+intents.guilds = True
+intents.members = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# 봇 로그인 완료 메시지
+# 전역 상태 저장용 변수들
+music_queue = {}
+tts_channel_id = None
+volume = 0.5
+
 @bot.event
 async def on_ready():
-    print(f'✅ 로그인됨: {bot.user}')
+    print(f'Logged in as {bot.user.name}')
 
-@bot.command()
-async def 안녕(ctx):
-    await ctx.send('안녕하세요! 디스코드 봇이에요 🤖')
-
-@bot.command()
-async def 들어(ctx, url):
-    if not ctx.author.voice:
-        await ctx.send("먼저 음성 채널에 들어가 있어야 해요!")
-        return
-
+# 음악 재생 명령어
+@bot.command(name="들어")
+async def play(ctx, *, url):
     voice_channel = ctx.author.voice.channel
+    if ctx.guild.id not in music_queue:
+        music_queue[ctx.guild.id] = []
+    music_queue[ctx.guild.id].append(url)
+
     if ctx.voice_client is None:
         vc = await voice_channel.connect()
-    else:
-        vc = ctx.voice_client
+        await play_music(ctx, vc)
+    elif not ctx.voice_client.is_playing():
+        await play_music(ctx, ctx.voice_client)
 
-    if vc.is_playing():
-        vc.stop()
+async def play_music(ctx, vc):
+    if not music_queue[ctx.guild.id]:
+        await vc.disconnect()
+        return
+
+    url = music_queue[ctx.guild.id].pop(0)
 
     ydl_opts = {
         'format': 'bestaudio/best',
         'noplaylist': True,
         'quiet': True,
-        'cookiefile': 'cookies.txt',  # ← 이 줄 추가
-        'default_search': 'auto',
-    }
-
-    ffmpeg_options = {
-        'options': '-vn'
+        'default_search': 'auto'
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         stream_url = info['url']
 
-    # ffmpeg 경로 (Render는 시스템에 설치되어 있어 지정 불필요)
-    vc.play(discord.FFmpegPCMAudio(stream_url, **ffmpeg_options))
-    await ctx.send(f"🎶 지금 재생 중: {info['title']}")
+    ffmpeg_options = {
+        'options': f'-vn -filter:a "volume={volume}"'
+    }
+    vc.play(discord.FFmpegPCMAudio(stream_url, **ffmpeg_options), after=lambda e: asyncio.run_coroutine_threadsafe(play_music(ctx, vc), bot.loop))
 
-@bot.command()
-async def 멈춰(ctx):
-    if ctx.voice_client:
-        await ctx.voice_client.disconnect()
-        await ctx.send("⛔ 음악을 멈췄어요!")
-
-@bot.command()
-async def 일시정지(ctx):
-    if ctx.voice_client and ctx.voice_client.is_playing():
+# 일시정지
+@bot.command(name="일시정지")
+async def pause(ctx):
+    if ctx.voice_client.is_playing():
         ctx.voice_client.pause()
-        await ctx.send("⏸️ 음악을 일시정지했어요!")
+        await ctx.send("⏸️ 음악을 일시정지했어요.")
 
-@bot.command()
-async def 다시재생(ctx):
-    if ctx.voice_client and ctx.voice_client.is_paused():
-        ctx.voice_client.resume()
-        await ctx.send("▶️ 음악을 다시 재생했어요!")
+# 볼륨 조절
+@bot.command(name="볼륨")
+async def set_volume(ctx, vol: int):
+    global volume
+    volume = vol / 100
+    await ctx.send(f"🔊 볼륨을 {vol}%로 설정했어요.")
 
-@bot.command()
-async def 볼륨(ctx, volume: float):
-    vc = ctx.voice_client
-    if not vc or not vc.is_playing():
-        await ctx.send("지금 재생 중인 음악이 없어요!")
-        return
-    if volume < 0.0 or volume > 2.0:
-        await ctx.send("볼륨은 0.0부터 2.0 사이로 설정할 수 있어요.")
-        return
+# TTS 채널 설정
+@bot.command(name="tts채널")
+async def set_tts_channel(ctx):
+    global tts_channel_id
+    tts_channel_id = ctx.channel.id
+    await ctx.send(f"🔈 이제부터 이 채널 메시지를 TTS로 읽을게요!")
 
-    vc.source = PCMVolumeTransformer(vc.source, volume)
-    await ctx.send(f"🔊 볼륨을 {volume:.1f}으로 설정했어요.")
+# 메시지 감지 및 TTS 실행
+@bot.event
+async def on_message(message):
+    global tts_channel_id
 
-@bot.command()
-async def 말해(ctx, *, text: str):
-    if not ctx.author.voice:
-        await ctx.send("먼저 음성 채널에 들어가 있어야 해요!")
+    if message.author.bot:
         return
 
-    vc = ctx.voice_client
-    if vc is None:
-        vc = await ctx.author.voice.channel.connect()
+    await bot.process_commands(message)
 
-    tts = gTTS(text=text, lang='ko')
+    if message.channel.id != tts_channel_id:
+        return
+
+    if not message.author.voice or not message.author.voice.channel:
+        return
+
+    voice_channel = message.author.voice.channel
+    try:
+        vc = await voice_channel.connect()
+    except discord.ClientException:
+        vc = discord.utils.get(bot.voice_clients, guild=message.guild)
+
+    tts = gTTS(text=message.content, lang='ko')
     tts.save("tts.mp3")
 
-    if vc.is_playing():
-        vc.stop()
+    vc.play(FFmpegPCMAudio("tts.mp3"))
 
-    vc.play(discord.FFmpegPCMAudio("tts.mp3"))
-    await ctx.send(f"🗣️ `{text}` 라고 말했어요.")
+    while vc.is_playing():
+        await asyncio.sleep(1)
 
-# --------------------
-# Flask 가짜 웹 서버 (Render 웹 서비스용)
-# --------------------
-app = Flask('')
+    await vc.disconnect()
+    os.remove("tts.mp3")
 
-@app.route('/')
-def home():
-    return "봇 작동 중입니다!"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-threading.Thread(target=run).start()
-
-# 디스코드 봇 실행
-bot.run(os.getenv("BOT_TOKEN"))
+bot.run(TOKEN)
