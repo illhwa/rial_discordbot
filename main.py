@@ -120,3 +120,24 @@ async def on_message(message):
     os.remove("tts.mp3")
 
 bot.run(TOKEN)
+
+# --- Render keepalive용 웹서버 ---
+from flask import Flask
+from threading import Thread
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return 'Bot is alive!'
+
+def run():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run)
+    t.start()
+
+# 웹서버 실행 후 봇 시작
+keep_alive()
+bot.run(TOKEN)
