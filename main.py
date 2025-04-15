@@ -28,7 +28,7 @@ volume = 0.5
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user.name}')
+    print(f'✅ Logged in as {bot.user.name}')
 
 # 음악 재생 명령어
 @bot.command(name="들어")
@@ -65,12 +65,13 @@ async def play_music(ctx, vc):
     ffmpeg_options = {
         'options': f'-vn -filter:a "volume={volume}"'
     }
+
     vc.play(discord.FFmpegPCMAudio(stream_url, **ffmpeg_options), after=lambda e: asyncio.run_coroutine_threadsafe(play_music(ctx, vc), bot.loop))
 
 # 일시정지
 @bot.command(name="일시정지")
 async def pause(ctx):
-    if ctx.voice_client.is_playing():
+    if ctx.voice_client and ctx.voice_client.is_playing():
         ctx.voice_client.pause()
         await ctx.send("⏸️ 음악을 일시정지했어요.")
 
@@ -96,7 +97,7 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    await bot.process_commands(message)
+    await bot.process_commands(message)  # 이건 반드시 먼저 실행해야 명령어 인식됨
 
     if message.channel.id != tts_channel_id:
         return
@@ -121,12 +122,12 @@ async def on_message(message):
     await vc.disconnect()
     os.remove("tts.mp3")
 
-# Render용 웹 서버 (PORT 바인딩 유지용)
+# Render용 웹 서버 (Render는 웹 서버가 있어야 "서비스가 살아 있다"고 인식함)
 app = Flask('')
 
 @app.route('/')
 def home():
-    return 'Bot is alive!'
+    return '✅ Bot is alive!'
 
 def run():
     app.run(host='0.0.0.0', port=8080)
