@@ -46,8 +46,8 @@ async def 들어(ctx, url):
         'format': 'bestaudio/best',
         'noplaylist': True,
         'quiet': True,
+        'cookiefile': 'cookies.txt',  # ← 이 줄 추가
         'default_search': 'auto',
-        'source_address': '0.0.0.0',
     }
 
     ffmpeg_options = {
