@@ -1,4 +1,4 @@
-=import discord
+import discord
 from discord.ext import commands
 from gtts import gTTS
 import os
