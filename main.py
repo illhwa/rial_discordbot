@@ -2,8 +2,6 @@ import discord
 from discord.ext import commands
 import os
 from dotenv import load_dotenv
-import yt_dlp
-from discord import PCMVolumeTransformer
 from gtts import gTTS
 
 # Flask 포트 유지용
@@ -26,73 +24,21 @@ async def on_ready():
 
 @bot.command()
 async def 안녕(ctx):
-    await ctx.send('안녕하세요! 디스코드 봇이에요 🤖')
+    await ctx.send('안녕하세요! 디스코드 봇 rial이에요! 🤖')
 
 @bot.command()
-async def 들어(ctx, url):
-    if not ctx.author.voice:
-        await ctx.send("먼저 음성 채널에 들어가 있어야 해요!")
-        return
-
-    voice_channel = ctx.author.voice.channel
-
-    if ctx.voice_client is None:
-        vc = await voice_channel.connect()
-    else:
-        vc = ctx.voice_client
-
-    if vc.is_playing():
-        vc.stop()
-
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'noplaylist': True,
-        'quiet': True,
-        'default_search': 'auto',
-        'source_address': '0.0.0.0',
-    }
-
-    ffmpeg_options = {
-        'options': '-vn'
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        stream_url = info['url']
-
-    vc.play(discord.FFmpegPCMAudio(stream_url, **ffmpeg_options))
-    await ctx.send(f"🎶 지금 재생 중: {info['title']}")
+async def 도움말(ctx):
+    await ctx.send('도움이 필요하시면 Discord: `illhwa`로 연락주세요!')
 
 @bot.command()
-async def 멈춰(ctx):
-    if ctx.voice_client:
-        await ctx.voice_client.disconnect()
-        await ctx.send("⛔ 음악을 멈췄어요!")
-
-@bot.command()
-async def 일시정지(ctx):
-    if ctx.voice_client and ctx.voice_client.is_playing():
-        ctx.voice_client.pause()
-        await ctx.send("⏸️ 음악을 일시정지했어요!")
-
-@bot.command()
-async def 다시재생(ctx):
-    if ctx.voice_client and ctx.voice_client.is_paused():
-        ctx.voice_client.resume()
-        await ctx.send("▶️ 음악을 다시 재생했어요!")
-
-@bot.command()
-async def 볼륨(ctx, volume: float):
-    vc = ctx.voice_client
-    if not vc or not vc.is_playing():
-        await ctx.send("지금 재생 중인 음악이 없어요!")
-        return
-    if volume < 0.0 or volume > 2.0:
-        await ctx.send("볼륨은 0.0부터 2.0 사이로 설정할 수 있어요.")
-        return
-
-    vc.source = PCMVolumeTransformer(vc.source, volume)
-    await ctx.send(f"🔊 볼륨을 {volume:.1f}으로 설정했어요.")
+async def 명령어(ctx):
+    msg = """📋 사용 가능한 명령어 목록:
+- `!안녕`: 인사해요!
+- `!도움말`: 연락처 정보를 보여줘요.
+- `!명령어`: 이 도움말을 다시 보여줘요.
+- `!말해 [내용]`: 음성 채널에서 TTS로 말해요.
+- `!멈춰`: 음성 채널에서 나가요."""
+    await ctx.send(msg)
 
 @bot.command()
 async def 말해(ctx, *, text: str):
@@ -113,6 +59,12 @@ async def 말해(ctx, *, text: str):
     vc.play(discord.FFmpegPCMAudio("tts.mp3"))
 
     await ctx.send(f"🗣️ `{text}` 라고 말했어요.")
+
+@bot.command()
+async def 멈춰(ctx):
+    if ctx.voice_client:
+        await ctx.voice_client.disconnect()
+        await ctx.send("⛔ 통화방을 나갈게요! 다음에 봐요!")
 
 # 🧠 Flask 웹서버 - Render에서 서비스 살아있게 유지용
 app = Flask('')
